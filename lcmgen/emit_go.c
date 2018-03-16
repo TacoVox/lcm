@@ -107,12 +107,12 @@ static int primitive_type_size (const char *tn)
     if (!strcmp("int64_t", tn)) return 8;
     if (!strcmp("float", tn)) return 4;
     if (!strcmp("double", tn)) return 8;
-    if (!strcmp("string", tn)) return 100;
+    if (!strcmp("string", tn)) return 100; // TODO FIXME
     assert (0);
     return 0;
 }
 
-static void emit_conversion_function(FILE *f, const char *type, const char *src,
+static void emit_encode_function(FILE *f, const char *type, const char *src,
     int indent)
 {
     if (!strcmp(type, "boolean")) {
@@ -129,24 +129,35 @@ static void emit_conversion_function(FILE *f, const char *type, const char *src,
         emit(indent, "data[offset] = byte(p.%s)", src);
         emit(indent, "offset += 1");
     } else if (!strcmp(type, "int16_t")) {
-        emit(indent, "binary.BigEndian.PutUint16(data[offset:], uint16(p.%s))", src);
+        emit(indent, "binary.BigEndian.PutUint16(data[offset:],");
+        emit(indent + 1, "uint16(p.%s))", src);
         emit(indent, "offset += 2");
     } else if (!strcmp(type, "int32_t")) {
-        emit(indent, "binary.BigEndian.PutUint32(data[offset:], uint32(p.%s))", src);
+        emit(indent, "binary.BigEndian.PutUint32(data[offset:],");
+        emit(indent + 1, "uint32(p.%s))", src);
         emit(indent, "offset += 4");
     } else if (!strcmp(type, "int64_t")) {
-        emit(indent, "binary.BigEndian.PutUint64(data[offset:], uint64(p.%s))", src);
+        emit(indent, "binary.BigEndian.PutUint64(data[offset:],");
+        emit(indent + 1, "uint64(p.%s))", src);
         emit(indent, "offset += 8");
     } else if (!strcmp(type, "float")) {
-        emit(indent, "binary.BigEndian.PutUint32(data[offset:], math.Float32bits(p.%s))", src);
+        emit(indent, "binary.BigEndian.PutUint32(data[offset:],");
+        emit(indent + 1, "math.Float32bits(p.%s))", src);
         emit(indent, "offset += 4");
     } else if (!strcmp(type, "double")) {
-        emit(indent, "binary.BigEndian.PutUint64(data[offset:], math.Float64bits(p.%s))", src);
+        emit(indent, "binary.BigEndian.PutUint64(data[offset:],");
+        emit(indent + 1, "math.Float64bits(p.%s))", src);
         emit(indent, "offset += 8");
     } else if (!strcmp(type, "string")) {
-        emit(indent, "offset += copy(data[offset:], []byte(p.%s))", src);
-        //Zero terminate the string
-        emit(indent, "offset += copy(data[offset:], byte(0))");
+        emit(indent, "{");
+        emit(indent + 1, "bstr := []byte(p.%s)", src);
+        emit(indent + 1, "binary.BigEndian.PutUint32(data[offset:],");
+        emit(indent + 2, "uint32(len(bstr))+1)");
+        emit(indent + 1, "offset += 4");
+        emit(indent + 1, "offset += copy(data[offset:], bstr)");
+        emit(indent + 1, "data[offset] = 0");
+        emit(indent + 1, "offset += 1");
+        emit(indent, "}");
     }
 }
 
@@ -182,11 +193,15 @@ static void emit_decode_function(FILE *f, const char *type, const char *dst,
         emit(indent, "p.%s = math.Float64frombits(binary.BigEndian.Uint64(data[offset:]))", dst);
         emit(indent, "offset += 8");
     } else if (!strcmp(type, "string")) {
-        emit(indent, "for data[offset] != 0 {");
-        emit(indent + 1, "p.%s += string(data[offset])", dst);
-        emit(indent + 1, "offset += 1");
+        emit(indent, "{");
+        emit(indent + 1, "length := int(binary.BigEndian.Uint32(data[offset:]))");
+        emit(indent + 1, "offset += 4");
+        emit(indent + 1, "if length < 1 {");
+        emit(indent + 2, "return fmt.Errorf(\"Decoded string length is negative\")");
+        emit(indent + 1, "}");
+        emit(indent + 1, "p.%s = string(data[offset:offset + length-1])", dst);
+        emit(indent + 1, "offset += length");
         emit(indent, "}");
-        emit(indent, "offset += 1");
     }
 }
 
@@ -201,7 +216,6 @@ static void emit_go_imports(FILE *f, lcm_struct_t *ls) {
     emit(0, "import (");
     emit(1, "\"math\"");
     emit(1, "\"math/bits\"");
-    //emit(1, "\"bytes\"");
     emit(1, "\"encoding/binary\"");
     emit(1, "\"fmt\"");
     for (unsigned int i = 0; i < ls->members->len; i++) {
@@ -215,7 +229,7 @@ static void emit_go_imports(FILE *f, lcm_struct_t *ls) {
     emit(0, ")");
     emit_nl();
 
-    // TODO To silence not used warning by go compiler
+    // TODO To silence (possible) not used import warning by go compiler
     emit(0, "const _ = math.Pi");
     emit_nl();
 }
@@ -270,6 +284,7 @@ static void emit_go_deep_copy(FILE *f, lcm_struct_t *ls, const char *gotype) {
 
     for (unsigned int m = 0; m < ls->members->len; m++) {
         lcm_member_t *lm = (lcm_member_t *)g_ptr_array_index(ls->members, m);
+
         emit_comment(f, 1, lm->comment);
 
         const char *_membername = dots_to_underscores(lm->membername);
@@ -277,12 +292,12 @@ static void emit_go_deep_copy(FILE *f, lcm_struct_t *ls, const char *gotype) {
 
         if (lcm_is_primitive_type(lm->type->lctypename)) {
 
-            if (! lm->dimensions->len) {
+            if (!lm->dimensions->len) {
                 emit(1, "dst.%s = p.%s", membername, membername);
             } else {
                 unsigned int n;
                 GString *arraystr = g_string_new(membername);
-                for (n=0; n<lm->dimensions->len; n++) {
+                for (n = 0; n<lm->dimensions->len; n++) {
                     lcm_dimension_t *dim =
                         (lcm_dimension_t*)g_ptr_array_index(lm->dimensions, n);
                     g_string_append_printf(arraystr, "[i%d]", n);
@@ -300,16 +315,16 @@ static void emit_go_deep_copy(FILE *f, lcm_struct_t *ls, const char *gotype) {
                 emit(n + 1, "dst.%s = p.%s", arraystr->str, arraystr->str);
                 g_string_free(arraystr, TRUE);
 
-                for (n=lm->dimensions->len; n > 0; n--)
+                for (n = lm->dimensions->len; n > 0; n--)
                     emit(n, "}");
             }
         } else {
-            if (! lm->dimensions->len) {
+            if (!lm->dimensions->len) {
                 emit(1, "dst.%s = p.%s.Copy()", membername, membername);
             } else {
                 unsigned int n;
                 GString *arraystr = g_string_new(NULL);
-                for (n=0; n<lm->dimensions->len; n++) {
+                for (n = 0; n<lm->dimensions->len; n++) {
                     lcm_dimension_t *dim =
                         (lcm_dimension_t*)g_ptr_array_index(lm->dimensions, n);
                     g_string_append_printf(arraystr, "[i%d]", n);
@@ -328,7 +343,7 @@ static void emit_go_deep_copy(FILE *f, lcm_struct_t *ls, const char *gotype) {
                      arraystr->str, membername, arraystr->str);
                 g_string_free(arraystr, TRUE);
 
-                for (n=lm->dimensions->len; n > 0; n--)
+                for (n = lm->dimensions->len; n > 0; n--)
                     emit(n, "}");
             }
         }
@@ -368,18 +383,23 @@ static void emit_go_encode(FILE *f, lcm_struct_t *ls, const char *gotype) {
 static void emit_go_marshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype) {
     emit(0, "// MarshalBinary implements the BinaryMarshaller interface");
     emit(0, "func (p *%s) MarshalBinary() (data []byte, err error) {", gotype);
-    emit(1, "data = make([]byte, p.Size())");
-    emit(1, "offset := 0");
-    emit_nl();
-    //emit(1, "var buffer bytes.Buffer");
+    if (ls->members->len) {
+        emit(1, "data = make([]byte, p.Size())");
+        emit(1, "offset := 0");
+        emit_nl();
+    }
+
     for (unsigned int i = 0; i < ls->members->len; i++) {
         lcm_member_t *lm = (lcm_member_t *)g_ptr_array_index(ls->members, i);
+
         emit_comment(f, 1, lm->comment);
+
         const char *_membername = dots_to_underscores(lm->membername);
         const char *membername = first_to_upper(_membername);
 
         if (lcm_is_primitive_type(lm->type->lctypename)) {
-            if (! lm->dimensions->len) {
+            if (!lm->dimensions->len) {
+                // TODO split this into separate function
                 if (lcm_is_array_dimension_type(lm->type->lctypename)) {
                     // Find the arrays in which it is used
                     // Verify size is eq to their length
@@ -391,7 +411,6 @@ static void emit_go_marshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype
                             free((char *)batman);
                             GString *twoface = g_string_new("");
                             unsigned int batgirl = 0;
-                            emit_nl();
                             for (unsigned int k = 0; k < lm_->dimensions->len; k++) {
                                 lcm_dimension_t *dim = (lcm_dimension_t *) g_ptr_array_index (lm_->dimensions, k);
                                 if (dim->mode == LCM_VAR) {
@@ -424,14 +443,13 @@ static void emit_go_marshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype
                             g_string_free(twoface, TRUE);
                         }
                     }
-                } else {
-                    emit_conversion_function(f, lm->type->lctypename,
-                        membername, 1);
                 }
+                emit_encode_function(f, lm->type->lctypename,
+                    membername, 1);
             } else {
                 unsigned int n;
                 GString *arraystr = g_string_new(membername);
-                for (n=0; n<lm->dimensions->len; n++) {
+                for (n = 0; n<lm->dimensions->len; n++) {
                     lcm_dimension_t *dim =
                         (lcm_dimension_t*)g_ptr_array_index(lm->dimensions, n);
                     g_string_append_printf(arraystr, "[i%d]", n);
@@ -446,15 +464,15 @@ static void emit_go_marshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype
                             dim->size, n);
                     }
                 }
-                emit_conversion_function(f, lm->type->lctypename,
+                emit_encode_function(f, lm->type->lctypename,
                     arraystr->str, 1+n);
                 g_string_free(arraystr, TRUE);
 
-                for (n=lm->dimensions->len; n > 0; n--)
+                for (n = lm->dimensions->len; n > 0; n--)
                     emit(n, "}");
             }
         } else {
-            if (! lm->dimensions->len) {
+            if (!lm->dimensions->len) {
                 emit(1, "d, e := p.%s.MarshalBinary(); if e != nil {", membername);
                 emit(2, "return data, e");
                 emit(1, "}");
@@ -462,7 +480,7 @@ static void emit_go_marshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype
             } else {
                 unsigned int n;
                 GString *arraystr = g_string_new(NULL);
-                for (n=0; n<lm->dimensions->len; n++) {
+                for (n = 0; n<lm->dimensions->len; n++) {
                     lcm_dimension_t *dim =
                         (lcm_dimension_t*)g_ptr_array_index(lm->dimensions, n);
                     g_string_append_printf(arraystr, "[i%d]", n);
@@ -484,7 +502,7 @@ static void emit_go_marshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype
                 emit(2, "offset += copy(data[offset:], d)");
                 g_string_free(arraystr, TRUE);
 
-                for (n=lm->dimensions->len; n > 0; n--)
+                for (n = lm->dimensions->len; n > 0; n--)
                     emit(n, "}");
             }
         }
@@ -531,22 +549,26 @@ static void emit_go_unmarshal_binary(FILE *f, lcm_struct_t *ls, const char *goty
     int readVar = 0;
     emit(0, "// UnmarshalBinary implements the BinaryUnmarshaler interface");
     emit(0, "func (p *%s) UnmarshalBinary(data []byte) (err error) {", gotype);
-    emit(1, "offset := 0");
-    emit_nl();
+    if (ls->members->len) {
+        emit(1, "offset := 0");
+        emit_nl();
+    }
 
     for (unsigned int m = 0; m < ls->members->len; m++) {
         lcm_member_t *lm = (lcm_member_t *) g_ptr_array_index(ls->members, m);
+
         emit_comment(f, 1, lm->comment);
+
         const char *_membername = dots_to_underscores(lm->membername);
         const char *membername = first_to_upper(_membername);
 
         if (lcm_is_primitive_type(lm->type->lctypename)) {
-            if (! lm->dimensions->len) {
+            if (!lm->dimensions->len) {
                 emit_decode_function(f, lm->type->lctypename, membername, 1);
             } else {
                 unsigned int n;
                 GString *arraystr = g_string_new(membername);
-                for (n=0; n<lm->dimensions->len; n++) {
+                for (n = 0; n<lm->dimensions->len; n++) {
                     lcm_dimension_t *dim =
                         (lcm_dimension_t*)g_ptr_array_index(lm->dimensions, n);
                     g_string_append_printf(arraystr, "[i%d]", n);
@@ -564,11 +586,11 @@ static void emit_go_unmarshal_binary(FILE *f, lcm_struct_t *ls, const char *goty
                 emit_decode_function(f, lm->type->lctypename, arraystr->str, 1+n);
                 g_string_free(arraystr, TRUE);
 
-                for (n=lm->dimensions->len; n > 0; n--)
+                for (n = lm->dimensions->len; n > 0; n--)
                     emit(n, "}");
             }
         } else {
-            if (! lm->dimensions->len) {
+            if (!lm->dimensions->len) {
                 emit(1, "err = p.%s.UnmarshalBinary(data[offset:]); if err != nil {", membername);
                 emit(2, "return");
                 emit(1, "}");
@@ -576,7 +598,7 @@ static void emit_go_unmarshal_binary(FILE *f, lcm_struct_t *ls, const char *goty
             } else {
                 unsigned int n;
                 GString *arraystr = g_string_new(NULL);
-                for (n=0; n<lm->dimensions->len; n++) {
+                for (n = 0; n<lm->dimensions->len; n++) {
                     lcm_dimension_t *dim =
                         (lcm_dimension_t*)g_ptr_array_index(lm->dimensions, n);
                     g_string_append_printf(arraystr, "[i%d]", n);
@@ -595,10 +617,10 @@ static void emit_go_unmarshal_binary(FILE *f, lcm_struct_t *ls, const char *goty
                     arraystr->str);
                 emit(n + 2, "return");
                 emit(n + 1, "}");
-                emit(1, "offset += p.%s.Size()", membername);
+                emit(n + 1, "offset += p.%s%s.Size()", membername, arraystr->str);
                 g_string_free(arraystr, TRUE);
 
-                for (n=lm->dimensions->len; n > 0; n--)
+                for (n = lm->dimensions->len; n > 0; n--)
                     emit(n, "}");
             }
         }
@@ -606,7 +628,7 @@ static void emit_go_unmarshal_binary(FILE *f, lcm_struct_t *ls, const char *goty
         free((char *)_membername);
         free((char *)membername);
     }
-    emit(1, "return nil");
+    emit(1, "return");
     emit(0, "}");
     emit_nl();
 }
@@ -694,7 +716,6 @@ int emit_go_enum(lcmgen_t *lcm, lcm_enum_t *le)
     return 0;
 }
 
-// TODO split into smaller functions
 int emit_go_struct(lcmgen_t *lcm, lcm_struct_t *ls)
 {
     const char *tn = ls->structname->lctypename;
