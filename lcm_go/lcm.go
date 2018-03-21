@@ -25,7 +25,7 @@ import (
 	"unsafe"
 )
 
-var lcm *LCM = nil
+var lcms []*LCM
 
 type LCM struct {
 	cLCM          *C.lcm_t
@@ -40,12 +40,7 @@ type LCMSubscription struct {
 
 type lcmHandler func([]byte, string)
 
-func LCMInstance() (*LCM, error) {
-	if lcm != nil {
-		return lcm, nil
-	}
-
-	var err error
+func LCMCreate() (lcm *LCM, err error) {
 	lcm = &LCM{}
 
 	if lcm.cLCM = C.lcm_create(nil); lcm.cLCM == nil {
@@ -55,6 +50,8 @@ func LCMInstance() (*LCM, error) {
 
 	lcm.subscriptions = make([]*LCMSubscription, 0)
 
+	lcms = append(lcms, lcm)
+
 	return lcm, nil
 }
 
@@ -63,9 +60,11 @@ func goLCMCallbackHandler(data unsafe.Pointer, size C.int, name *C.char) {
 	channel := C.GoString(name)
 	buffer := C.GoBytes(data, C.int(size))
 
-	for _, subscription := range lcm.subscriptions {
-		if channel == subscription.channel {
-			subscription.handler(buffer, channel)
+	for _, lcm := range lcms {
+		for _, subscription := range lcm.subscriptions {
+			if channel == subscription.channel {
+				subscription.handler(buffer, channel)
+			}
 		}
 	}
 }
@@ -117,7 +116,7 @@ func (lcm *LCM) Publish(channel string, data []byte) error {
 		return fmt.Errorf("Could not malloc memory for lcm message.")
 	}
 	defer C.free(buffer)
-	C.memcpy(buffer, unsafe.Pointer(&data), dataSize)
+	C.memcpy(buffer, unsafe.Pointer(&data[0]), dataSize)
 
 	cChannel := C.CString(channel)
 	defer C.free(unsafe.Pointer(cChannel))
@@ -136,4 +135,14 @@ func (lcm *LCM) Handle() error {
 	}
 
 	return nil
+}
+
+func (lcm *LCM) Destroy() {
+	C.lcm_destroy(lcm.cLCM)
+
+	for i, l := range lcms {
+		if l == lcm {
+			lcms = append(lcms[:i], lcms[i+1:]...)
+		}
+	}
 }

@@ -20,7 +20,7 @@ func TestLCM(t *testing.T) {
 	var subscription *LCMSubscription
 
 	// New LCM
-	if lcm, err = LCMInstance(); err != nil {
+	if lcm, err = LCMCreate(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -66,4 +66,6 @@ func TestLCM(t *testing.T) {
 	if err = lcm.Unsubscribe(subscription); err != nil {
 		t.Fatal(err)
 	}
+
+	lcm.Destroy()
 }
