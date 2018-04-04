@@ -454,6 +454,7 @@ static void emit_go_struct_definition(FILE *f, lcm_struct_t *ls, const char *got
             max_member_len = strlen(lm->membername);
     }
 
+    emit_comment(f, 0, ls->comment);
     emit(0, "type %s struct {", gotype);
 
     for (unsigned int i = 0; i < ls->members->len; i++) {
@@ -496,8 +497,6 @@ static void emit_go_deep_copy(FILE *f, lcm_struct_t *ls, const char *gotype) {
 
     for (unsigned int m = 0; m < ls->members->len; m++) {
         lcm_member_t *lm = (lcm_member_t *)g_ptr_array_index(ls->members, m);
-
-        emit_comment(f, 1, lm->comment);
 
         const char *membername = go_membername(f, ls, lm->membername, FALSE);
 
@@ -685,7 +684,6 @@ static void emit_go_marshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype
     for (unsigned int i = 0; i < ls->members->len; i++) {
         lcm_member_t *lm = (lcm_member_t *)g_ptr_array_index(ls->members, i);
 
-        emit_comment(f, 1, lm->comment);
         emit(1, "// LCM struct name: %s", lm->membername);
 
         const char *membername = go_membername(f, ls, lm->membername, FALSE);
@@ -789,8 +787,6 @@ static void emit_go_unmarshal_binary(FILE *f, lcm_struct_t *ls, const char *goty
 
     for (unsigned int m = 0; m < ls->members->len; m++) {
         lcm_member_t *lm = (lcm_member_t *) g_ptr_array_index(ls->members, m);
-
-        emit_comment(f, 1, lm->comment);
 
         const char *membername = go_membername(f, ls, lm->membername, FALSE);
 
