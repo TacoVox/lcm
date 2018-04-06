@@ -45,14 +45,14 @@ func LCMCreate() (lcm *LCM, err error) {
 
 	if lcm.cLCM = C.lcm_create(nil); lcm.cLCM == nil {
 		err = fmt.Errorf("Could not create C lcm_t.")
-		return nil, err
+		return
 	}
 
 	lcm.subscriptions = make([]*LCMSubscription, 0)
 
 	lcms = append(lcms, lcm)
 
-	return lcm, nil
+	return
 }
 
 //export goLCMCallbackHandler
@@ -69,8 +69,8 @@ func goLCMCallbackHandler(data unsafe.Pointer, size C.int, name *C.char) {
 	}
 }
 
-func (lcm *LCM) Subscribe(channel string, handler lcmHandler) (*LCMSubscription, error) {
-	subscription := &LCMSubscription{}
+func (lcm *LCM) Subscribe(channel string, handler lcmHandler) (subscription *LCMSubscription, err error) {
+	subscription = &LCMSubscription{}
 	subscription.channel = channel
 	subscription.handler = handler
 
@@ -79,13 +79,13 @@ func (lcm *LCM) Subscribe(channel string, handler lcmHandler) (*LCMSubscription,
 
 	subscription.cLCMSubscription = C.lcm_go_subscribe(lcm.cLCM, cChannel)
 	if subscription.cLCMSubscription == nil {
-		err := fmt.Errorf("Could not subscribe to channel %s.", channel)
-		return nil, err
+		err = fmt.Errorf("Could not subscribe to channel %s.", channel)
+		return
 	}
 
 	lcm.subscriptions = append(lcm.subscriptions, subscription)
 
-	return subscription, nil
+	return
 }
 
 func (subscription *LCMSubscription) SetQueueCapacity(numMessages int) error {
