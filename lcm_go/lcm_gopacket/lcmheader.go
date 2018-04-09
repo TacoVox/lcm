@@ -31,7 +31,7 @@ type LCMHeader struct {
 }
 
 var LayerTypeLCMHeader gopacket.LayerType
-var lcmLayerTypes map[uint64]gopacket.LayerType
+var lcmLayerTypes map[uint64]gopacket.LayerType = map[uint64]gopacket.LayerType{}
 var layerTypeIndex int = 1112
 
 func Initialize() {
@@ -107,7 +107,7 @@ func (lcm *LCMHeader) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) e
 		lcm.Fragmented = false
 	}
 
-	buffer := make([]byte, 1)
+	buffer := make([]byte, 0)
 	for _, b := range data[8:] {
 		offset++
 
@@ -117,6 +117,7 @@ func (lcm *LCMHeader) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) e
 
 		buffer = append(buffer, b)
 	}
+
 	lcm.ChannelName = string(buffer)
 
 	lcm.fingerprint = binary.BigEndian.Uint64(data[offset : offset+8])
