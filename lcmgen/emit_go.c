@@ -389,17 +389,17 @@ static void emit_go_array_loops_end(FILE *f, unsigned int n) {
 /*
  * Emits the header of the .go file.
  */
-static void emit_go_header(FILE *f, const char *gopacket)
+static void emit_go_header(FILE *f, const char *gopackage)
 {
     emit_auto_generated_warning(f);
-    emit(0, "package %s", gopacket);
+    emit(0, "package %s", gopackage);
     emit_nl();
 }
 
 /*
  * Emits the import of required packages.
  */
-static void emit_go_imports(FILE *f, lcm_struct_t *ls) {
+static void emit_go_lcm_imports(FILE *f, lcm_struct_t *ls) {
     emit(0, "import (");
     emit(1, "\"encoding/binary\"");
     emit(1, "\"fmt\"");
@@ -436,7 +436,7 @@ static void emit_go_imports(FILE *f, lcm_struct_t *ls) {
 /*
  * Emits the fingerprint of this particular struct as a constant.
  */
-static void emit_go_fingerprint_const(FILE *f, lcm_struct_t *ls) {
+static void emit_go_lcm_fingerprint_const(FILE *f, lcm_struct_t *ls) {
     emit(0, "const fingerprint uint64 = 0x%016"PRIx64, ls->hash);
     emit_nl();
 }
@@ -444,7 +444,7 @@ static void emit_go_fingerprint_const(FILE *f, lcm_struct_t *ls) {
 /*
  * Emits the const defintions.
  */
-static void emit_go_const_definitions(FILE *f, lcm_struct_t *ls,
+static void emit_go_lcm_const_definitions(FILE *f, lcm_struct_t *ls,
     const char *gotype) {
     if (!ls->constants->len) {
         return;
@@ -493,7 +493,7 @@ static void emit_go_const_definitions(FILE *f, lcm_struct_t *ls,
 /*
  * Emits the struct's defintion.
  */
-static void emit_go_struct_definition(FILE *f, lcm_struct_t *ls,
+static void emit_go_lcm_struct_definition(FILE *f, lcm_struct_t *ls,
     const char *gotype) {
     unsigned int max_member_len = 0;
 
@@ -541,7 +541,7 @@ static void emit_go_struct_definition(FILE *f, lcm_struct_t *ls,
 /*
  * This function emits code that will create an exact copy of the struct.
  */
-static void emit_go_deep_copy(FILE *f, lcm_struct_t *ls, const char *gotype) {
+static void emit_go_lcm_deep_copy(FILE *f, lcm_struct_t *ls, const char *gotype) {
     emit(0, "// Copy creates a deep copy");
     emit(0, "func (p *%s) Copy() (dst %s) {", gotype, gotype);
 
@@ -586,7 +586,7 @@ static void emit_go_deep_copy(FILE *f, lcm_struct_t *ls, const char *gotype) {
 /*
  * Emits the main decode function.
  */
-static void emit_go_encode(FILE *f, lcm_struct_t *ls, const char *gotype) {
+static void emit_go_lcm_encode(FILE *f, lcm_struct_t *ls, const char *gotype) {
     emit(0, "// Encode encodes a message (fingerprint & data) into binary form");
     emit(0, "//");
     emit(0, "// returns Encoded data or error");
@@ -617,7 +617,7 @@ static void emit_go_encode(FILE *f, lcm_struct_t *ls, const char *gotype) {
  * Emits getters for read-only struct members. That is all who are used as the
  * size definition for LCM dynamic arrays.
  */
-static void emit_go_read_only_getters(FILE *f, lcm_struct_t *ls,
+static void emit_go_lcm_read_only_getters(FILE *f, lcm_struct_t *ls,
     const char *gotype) {
 
     for (unsigned int k = 0; k < ls->members->len; k++) {
@@ -698,7 +698,7 @@ static void emit_go_read_only_getters(FILE *f, lcm_struct_t *ls,
  * definition for a LCM dynamic array, and populates the read-only member with
  * correct value.
  */
-static void emit_go_dynamic_array_check(FILE *f, lcm_struct_t *ls,
+static void emit_go_lcm_dynamic_array_check(FILE *f, lcm_struct_t *ls,
     lcm_member_t *lm) {
     if (lcm_find_member_with_named_dimension(ls, lm->membername, 0)
         < ls->members->len) {
@@ -717,7 +717,7 @@ static void emit_go_dynamic_array_check(FILE *f, lcm_struct_t *ls,
  * Emits Golang code to marshal each of the structs members into a byte slice
  * that can be send.
  */
-static void emit_go_marshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype) {
+static void emit_go_lcm_marshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype) {
     emit(0, "// MarshalBinary implements the BinaryMarshaller interface");
     emit(0, "func (p *%s) MarshalBinary() (data []byte, err error) {", gotype);
     if (ls->members->len) {
@@ -785,7 +785,7 @@ static void emit_go_marshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype
 /*
  * Emits the main decode function.
  */
-static void emit_go_decode(FILE *f, lcm_struct_t *ls, const char *gotype) {
+static void emit_go_lcm_decode(FILE *f, lcm_struct_t *ls, const char *gotype) {
     emit(0, "// Decode decodes a message (fingerprint & data) from binary form");
     emit(0, "// and verifies that the fingerprint match the expected");
     emit(0, "//");
@@ -825,7 +825,7 @@ static void emit_go_decode(FILE *f, lcm_struct_t *ls, const char *gotype) {
  * Emits Golang code to unmarshal data from a byte slice back into the structs
  * members.
  */
-static void emit_go_unmarshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype) {
+static void emit_go_lcm_unmarshal_binary(FILE *f, lcm_struct_t *ls, const char *gotype) {
     int readVar = 0;
     emit(0, "// UnmarshalBinary implements the BinaryUnmarshaler interface");
     emit(0, "func (p *%s) UnmarshalBinary(data []byte) (err error) {", gotype);
@@ -891,7 +891,7 @@ static void emit_go_unmarshal_binary(FILE *f, lcm_struct_t *ls, const char *goty
  * The emitted code generates the fingerprint as described in
  * https://lcm-proj.github.io/type_specification.html
  */
-static void emit_go_fingerprint(FILE *f, lcm_struct_t *ls, const char *gotype) {
+static void emit_go_lcm_fingerprint(FILE *f, lcm_struct_t *ls, const char *gotype) {
     emit(0, "// Fingerprint generates the LCM fingerprint value for this message");
     emit(0, "func Fingerprint(path ...uint64) uint64 {");
     emit(1, "for _, v := range path {");
@@ -924,7 +924,7 @@ static void emit_go_fingerprint(FILE *f, lcm_struct_t *ls, const char *gotype) {
  * Emits code to calculate the size a string in bytes. This takes into account
  * that LCM will send 4 bytes prepending the string and one terminating it.
  */
-static void emit_go_string_size(FILE *f, int indent, const char *str_prefix,
+static void emit_go_lcm_string_size(FILE *f, int indent, const char *str_prefix,
                                 const char *str_name, const char *str_postfix,
                                 const char *rec_val) {
     emit(indent, "%s += 4 // LCM string length", rec_val);
@@ -937,7 +937,7 @@ static void emit_go_string_size(FILE *f, int indent, const char *str_prefix,
  * Emits codes to calculate the actual size in bytes when this message is
  * marshalled.
  */
-static void emit_go_size(FILE *f, lcm_struct_t *ls, const char *gotype) {
+static void emit_go_lcm_size(FILE *f, lcm_struct_t *ls, const char *gotype) {
     emit(0, "// Size returns the size of this message in bytes");
     emit(0, "func (p *%s) Size() (size int, err error) {", gotype);
     emit_nl();
@@ -954,9 +954,9 @@ static void emit_go_size(FILE *f, lcm_struct_t *ls, const char *gotype) {
         if (lcm_is_primitive_type(lm->type->lctypename)) {
             if (!lm->dimensions->len) {
                 if (strcmp(lm->type->lctypename, "string") == 0) {
-                    emit_go_string_size(f, 1, "p.", membername, "", "size");
+                    emit_go_lcm_string_size(f, 1, "p.", membername, "", "size");
                 } else {
-                    emit_go_dynamic_array_check(f, ls, lm);
+                    emit_go_lcm_dynamic_array_check(f, ls, lm);
                     emit(1, "size += %d // p.%s",
                          primitive_type_size(lm->type->lctypename), membername);
                 }
@@ -965,7 +965,7 @@ static void emit_go_size(FILE *f, lcm_struct_t *ls, const char *gotype) {
                 unsigned int n = emit_go_array_loops(f, ls, lm, arraystr, FALSE, lm->dimensions->len);
 
                 if (strcmp(lm->type->lctypename, "string") == 0) {
-                    emit_go_string_size(f, n + 1, "p.", membername,
+                    emit_go_lcm_string_size(f, n + 1, "p.", membername,
                                         arraystr->str, "size");
                 } else {
                     emit(n + 1, "size += %d // p.%s",
@@ -1007,37 +1007,14 @@ ret_size:
     emit(0, "}");
 }
 
-int emit_go_enum(lcmgen_t *lcm, lcm_enum_t *le)
-{
-    char *tn = le->enumname->lctypename;
-    char *tn_ = dots_to_underscores(tn);
-    char *path = g_strdup_printf("%s/%s_enums.go",
-            getopt_get_string(lcm->gopt, "go-path"),
-            tn_);
-
-    if (!lcm_needs_generation(lcm, le->lcmfile, path))
-        return 0;
-
-    FILE *f = fopen(path, "w");
-    if (f==NULL)
-        return -1;
-
-    emit_go_header(f, tn_);
-    emit(0, "// TODO");
-
-    free(tn_);
-
-    return 0;
-}
-
-int emit_go_struct(lcmgen_t *lcm, lcm_struct_t *ls)
+int emit_go_lcm(lcmgen_t *lcm, lcm_struct_t *ls)
 {
     const char *tn = ls->structname->lctypename;
-    const char *gopacket = dots_to_underscores(tn);
-    const char *gotype = first_to_upper(gopacket);
-    const char *path = g_strdup_printf("%s/%s_structs.go",
+    const char *gopackage = dots_to_underscores(tn);
+    const char *gotype = first_to_upper(gopackage);
+    const char *path = g_strdup_printf("%s/%s.go",
             getopt_get_string(lcm->gopt, "go-path"),
-            gopacket);
+            gopackage);
 
     if (!lcm_needs_generation(lcm, ls->lcmfile, path))
         return 0;
@@ -1047,46 +1024,160 @@ int emit_go_struct(lcmgen_t *lcm, lcm_struct_t *ls)
         return -1;
 
     // Header
-    emit_go_header(f, gopacket);
+    emit_go_header(f, gopackage);
 
     // Imports
-    emit_go_imports(f, ls);
+    emit_go_lcm_imports(f, ls);
 
     // Fingerprint const
-    emit_go_fingerprint_const(f, ls);
+    emit_go_lcm_fingerprint_const(f, ls);
 
     // Const definitions
-    emit_go_const_definitions(f, ls, gotype);
+    emit_go_lcm_const_definitions(f, ls, gotype);
 
     // Struct definition
-    emit_go_struct_definition(f, ls, gotype);
+    emit_go_lcm_struct_definition(f, ls, gotype);
 
     // Functions
     // Deep copy
-    emit_go_deep_copy(f, ls, gotype);
+    emit_go_lcm_deep_copy(f, ls, gotype);
 
     // Encode
-    emit_go_encode(f, ls, gotype);
+    emit_go_lcm_encode(f, ls, gotype);
 
     // MarshalBinary
-    emit_go_marshal_binary(f, ls, gotype);
+    emit_go_lcm_marshal_binary(f, ls, gotype);
 
     // Decode
-    emit_go_decode(f, ls, gotype);
+    emit_go_lcm_decode(f, ls, gotype);
 
     // UnmarshalBinary
-    emit_go_unmarshal_binary(f, ls, gotype);
+    emit_go_lcm_unmarshal_binary(f, ls, gotype);
 
     // Getters for read only fields (all fields used as array sizes)
-    emit_go_read_only_getters(f, ls, gotype);
+    emit_go_lcm_read_only_getters(f, ls, gotype);
 
     // Fingerprint
-    emit_go_fingerprint(f, ls, gotype);
+    emit_go_lcm_fingerprint(f, ls, gotype);
 
     // Size
-    emit_go_size(f, ls, gotype);
+    emit_go_lcm_size(f, ls, gotype);
 
-    free((char *)gopacket);
+    free((char *)gopackage);
+    free((char *)gotype);
+    free((char *)path);
+
+    fclose(f);
+
+    return 0;
+}
+
+int emit_go_gopacket(lcmgen_t *lcm, lcm_struct_t *ls)
+{
+    const char *tn = ls->structname->lctypename;
+    const char *gopackage = dots_to_underscores(tn);
+    const char *gotype = first_to_upper(gopackage);
+    const char *path = g_strdup_printf("%s/%s_gopacket.go",
+            getopt_get_string(lcm->gopt, "go-path"),
+            gopackage);
+
+    if (!lcm_needs_generation(lcm, ls->lcmfile, path))
+        return 0;
+
+    FILE *f = fopen(path, "w");
+    if (f==NULL)
+        return -1;
+
+    // Header
+    emit_go_header(f, gopackage);
+
+    // Imports
+    emit(0, "import (");
+    emit(1, "\"github.com/google/gopacket\"");
+    emit(1, "\"lcm_gopacket\"");
+    emit(0, ")");
+    emit_nl();
+
+    // The gopacket LayerClass assigned to us
+    emit(0, "var layerClass gopacket.LayerType = gopacket.LayerTypeZero");
+    emit_nl();
+
+    // Register our decoder
+    emit(0, "func init() {");
+    emit(1, "// Register ourselves as decoders for %s", "TODO");
+    emit(1, "layerClass = lcm_gopacket.RegisterLCMLayerType(%s, gopacket.DecodeFunc(%s.decodeFunc))",
+        "Fingerprint()", gotype);
+    emit(0, "}");
+    emit_nl();
+
+    // Implement the gopacket Decoder go interface
+    emit(0, "// decodeFunc is the implementation of Decoder (type DecodeFunc)");
+    emit(0, "func (%s) decodeFunc(data []byte, pb gopacket.PacketBuilder) error {",
+        gotype);
+    emit(1, "lcm := %s{}", gotype);
+    emit_nl();
+    emit(1, "if err := lcm.DecodeFromBytes(data, pb); err != nil {");
+    emit(2, "return err");
+    emit(1, "}");
+    emit_nl();
+    emit(1, "pb.AddLayer(&lcm)");
+    emit(1, "pb.SetApplicationLayer(&lcm)");
+    emit_nl();
+    emit(1, "return nil // No further call since we have no payload");
+    emit(0, "}");
+    emit_nl();
+
+    // Implement the gopacket DecodingLayer go interface
+    emit(0, "// DecodeFromBytes implements DecodingLayer");
+    emit(0, "func (lcm *%s) DecodeFromBytes(data []byte, "
+            "df gopacket.DecodeFeedback) error {", gotype);
+    emit(1, "return lcm.Decode(data)");
+    emit(0, "}");
+    emit_nl();
+
+    emit(0, "// CanDecode implements DecodingLayer");
+    emit(0, "func (%s) CanDecode() gopacket.LayerClass {", gotype);
+    emit(1, "return layerClass");
+    emit(0, "}");
+    emit_nl();
+
+    emit(0, "// NextLayerType implements DecodingLayer");
+    emit(0, "func (%s) NextLayerType() gopacket.LayerType {", gotype);
+    emit(1, "return gopacket.LayerTypePayload");
+    emit(0, "}");
+    emit_nl();
+
+    // Implement the gopacket Layer go interface
+    emit(0, "// LayerType implements Layer");
+    emit(0, "func (%s) LayerType() gopacket.LayerType {", gotype);
+    emit(1, "return layerClass");
+    emit(0, "}");
+    emit_nl();
+
+    emit(0, "// Payload implements Layer");
+    emit(0, "func (lcm *%s) LayerContents() []byte {", gotype);
+    emit(1, "data, err := lcm.Encode()");
+    emit(1, "if err != nil {");
+    emit(2, "panic(err) // What should we do here!?");
+    emit(1, "}");
+    emit(1, "return data");
+    emit(0, "}");
+    emit_nl();
+
+    emit(0, "// LayerPayload implements Layer");
+    emit(0, "func (%s) LayerPayload() []byte {", gotype);
+    emit(1, "return nil");
+    emit(0, "}");
+    emit_nl();
+
+    // Implement the gopacket ApplicationLayer go interface (embeds Layer)
+    emit(0, "// Payload implements ApplicationLayer");
+    emit(0, "func (%s) Payload() []byte {", gotype);
+    emit(1, "return nil");
+    emit(0, "}");
+    emit_nl();
+
+    free((char *)gopackage);
     free((char *)gotype);
     free((char *)path);
 
@@ -1098,17 +1189,16 @@ int emit_go_struct(lcmgen_t *lcm, lcm_struct_t *ls)
 void setup_go_options(getopt_t *gopt)
 {
     getopt_add_string(gopt, 0, "go-path", ".", "Location for .go files");
+    getopt_add_bool(gopt, 0, "go-emit-gopacket", TRUE, "Emit gopacket API or not");
 }
 
 int emit_go(lcmgen_t *lcmgen)
 {
     ////////////////////////////////////////////////////////////
     // ENUMS
-    for (unsigned int i = 0; i < lcmgen->enums->len; i++) {
-
-        lcm_enum_t *le = (lcm_enum_t *) g_ptr_array_index(lcmgen->enums, i);
-        if (emit_go_enum(lcmgen, le))
-            return -1;
+    // Deprecated and thus not supported
+    if (lcmgen->enums->len) {
+        return -1;
     }
 
     ////////////////////////////////////////////////////////////
@@ -1116,7 +1206,11 @@ int emit_go(lcmgen_t *lcmgen)
     for (unsigned int i = 0; i < lcmgen->structs->len; i++) {
         lcm_struct_t *ls = (lcm_struct_t *) g_ptr_array_index(lcmgen->structs, i);
 
-        if (emit_go_struct(lcmgen, ls))
+        if (emit_go_lcm(lcmgen, ls))
+            return -1;
+
+        if (getopt_get_bool(lcmgen->gopt, "go-emit-gopacket") &&
+            emit_go_gopacket(lcmgen, ls))
             return -1;
     }
 
