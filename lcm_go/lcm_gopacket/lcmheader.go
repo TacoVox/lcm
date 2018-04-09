@@ -96,6 +96,8 @@ func (lcm *LCMHeader) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) e
 
 		lcm.TotalFragments = binary.BigEndian.Uint16(data[offset : offset+2])
 		offset += 2
+	} else {
+		lcm.Framgented = false
 	}
 
 	buffer := make([]byte, 1)
