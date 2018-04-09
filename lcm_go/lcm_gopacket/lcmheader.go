@@ -25,12 +25,14 @@ type LCMHeader struct {
 	// COMMON FIELD
 	ChannelName string
 	// GOPACKET HELPER FIELDS
-	contents []byte
-	payload  []byte
+	fingerprint uint64
+	contents    []byte
+	payload     []byte
 }
 
 var LayerTypeLCMHeader gopacket.LayerType
-var lcmLayerTypes map[string]gopacket.LayerType
+var lcmLayerTypes map[uint64]gopacket.LayerType
+var layerTypeIndex int = 1112
 
 func Initialize() {
 	metadata := gopacket.LayerTypeMetadata{Name: "LCMHeader",
@@ -41,12 +43,17 @@ func Initialize() {
 	layers.RegisterUDPPortLayerType(layers.UDPPort(7667), LayerTypeLCMHeader)
 }
 
-func RegisterLCMLayerType(channelName string, lt gopacket.LayerType) {
-	lcmLayerTypes[channelName] = lt
+func RegisterLCMLayerType(fingerprint uint64, decoder gopacket.Decoder) gopacket.LayerType {
+	name := fmt.Sprintf("%v", fingerprint)
+	metadata := gopacket.LayerTypeMetadata{Name: name, Decoder: decoder}
+	lcmLayerTypes[fingerprint] = gopacket.RegisterLayerType(layerTypeIndex, metadata)
+	layerTypeIndex++
+
+	return lcmLayerTypes[fingerprint]
 }
 
-func getLCMLayerType(channelName string) gopacket.LayerType {
-	layerType, ok := lcmLayerTypes[channelName]
+func getLCMLayerType(fingerprint uint64) gopacket.LayerType {
+	layerType, ok := lcmLayerTypes[fingerprint]
 	if !ok {
 		return gopacket.LayerTypePayload
 	}
@@ -97,7 +104,7 @@ func (lcm *LCMHeader) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) e
 		lcm.TotalFragments = binary.BigEndian.Uint16(data[offset : offset+2])
 		offset += 2
 	} else {
-		lcm.Framgented = false
+		lcm.Fragmented = false
 	}
 
 	buffer := make([]byte, 1)
@@ -112,6 +119,8 @@ func (lcm *LCMHeader) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) e
 	}
 	lcm.ChannelName = string(buffer)
 
+	lcm.fingerprint = binary.BigEndian.Uint64(data[offset : offset+8])
+
 	lcm.contents = data[:offset]
 	lcm.payload = data[offset:]
 
@@ -123,7 +132,7 @@ func (lcm LCMHeader) CanDecode() gopacket.LayerClass {
 }
 
 func (lcm LCMHeader) NextLayerType() gopacket.LayerType {
-	return getLCMLayerType(lcm.ChannelName)
+	return getLCMLayerType(lcm.fingerprint)
 }
 
 func (lcm LCMHeader) LayerType() gopacket.LayerType {
