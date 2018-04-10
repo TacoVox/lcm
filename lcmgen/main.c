@@ -116,6 +116,7 @@ int main(int argc, char *argv[])
     }
 
     int did_something = 0;
+    int res = 0;
     if (getopt_get_bool(gopt, "debug")) {
         did_something = 1;
         lcmgen_dump(lcm);
@@ -125,6 +126,7 @@ int main(int argc, char *argv[])
         did_something = 1;
         if (emit_c(lcm)) {
             printf("An error occurred while emitting C code.\n");
+            res = -1;
         }
     }
 
@@ -132,6 +134,7 @@ int main(int argc, char *argv[])
         did_something = 1;
         if (emit_cpp(lcm)) {
             printf("An error occurred while emitting C++ code.\n");
+            res = -1;
         }
     }
 
@@ -139,6 +142,7 @@ int main(int argc, char *argv[])
         did_something = 1;
         if (emit_java(lcm)) {
             perror("An error occurred while emitting Java code.\n");
+            res = -1;
         }
     }
 
@@ -146,20 +150,23 @@ int main(int argc, char *argv[])
         did_something = 1;
         if (emit_python(lcm)) {
             printf("An error occurred while emitting Python code.\n");
+            res = -1;
         }
     }
 
     if (getopt_get_bool(gopt, "lua")) {
-    	did_something = 1;
-    	if (emit_lua(lcm)) {
-    		printf("An error occurred while emitting Lua code.\n");
-    	}
+       did_something = 1;
+       if (emit_lua(lcm)) {
+            printf("An error occurred while emitting Lua code.\n");
+            res = -1;
+        }
     }
 
     if (getopt_get_bool(gopt, "csharp")) {
         did_something = 1;
         if (emit_csharp(lcm)) {
             printf("An error occurred while emitting C#.NET code.\n");
+            res = -1;
         }
     }
 
@@ -167,12 +174,14 @@ int main(int argc, char *argv[])
         did_something = 1;
         if (emit_go(lcm)) {
             printf("An error occurred while emitting Go code.\n");
+            res = -1;
         }
     }
 
     if (did_something == 0) {
         printf("No actions specified. Try --help.\n");
+        res = -1;
     }
 
-    return 0;
+    return res;
 }
