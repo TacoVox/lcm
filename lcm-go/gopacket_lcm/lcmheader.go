@@ -3,6 +3,7 @@ package lcm_gopacket
 import (
 	"encoding/binary"
 	"fmt"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 )
@@ -34,7 +35,7 @@ var LayerTypeLCMHeader gopacket.LayerType
 var lcmLayerTypes map[uint64]gopacket.LayerType = map[uint64]gopacket.LayerType{}
 var layerTypeIndex int = 1112
 
-func Initialize() {
+func init() {
 	metadata := gopacket.LayerTypeMetadata{Name: "LCMHeader",
 		Decoder: gopacket.DecodeFunc(decodeLCMHeader)}
 
