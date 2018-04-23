@@ -34,11 +34,45 @@ static char *dots_to_underscores(const char *const s)
 {
     char *p = strdup(s);
 
-    for (char *t=p; *t!=0; t++)
+    for (char *t = p; *t != 0; t++)
         if (*t == '.')
             *t = '_';
 
     return p;
+}
+
+/*
+ * Simple function that takes a string like this.is.a.string and turns it into
+ * this/is/a/string.
+ *
+ * CAUTION: memory has to be freed manually.
+ */
+static char *dots_to_path(const char *const s)
+{
+    char *p = strdup(s);
+
+    for (char *t = p; *t != 0; t++)
+        if (*t == '.')
+            *t = G_DIR_SEPARATOR;
+
+    return p;
+}
+
+/*
+ * Simple function that takes a string like this.is.a.string and turns it into
+ * string.
+ *
+ * CAUTION: memory has to be freed manually.
+ */
+static char *strip_dots(const char *const s)
+{
+    char *p = (char *)s;
+
+    for (char *t = p; *t != 0; t++)
+        if (*t == '.')
+            p = t + 1;
+
+    return strdup(p);
 }
 
 /*
@@ -52,6 +86,42 @@ static char *first_to_upper(const char *const str)
     char *s = strdup(str);
     s[0] = toupper(s[0]);
     return s;
+}
+
+/*
+ * Simple function that takes a string like this_is.a_string and turns it into
+ * ThisIsAString. To follow Golang naming conventions.
+ *
+ * CAUTION: memory has to be freed manually.
+ */
+static char *go_name(const char *const str)
+{
+    char *ret = malloc(strlen(str)+1);
+
+    char *t = ret;
+    int upper = FALSE;
+    for (const char *p = str; *p != 0; p++) {
+        switch (*p) {
+            case '.':
+                upper = TRUE;
+                break;
+            case '_':
+                upper = TRUE;
+                break;
+            default:
+                if (upper) {
+                    *t = toupper(*p);
+                    upper = FALSE;
+                } else {
+                    *t = *p;
+                }
+                t++;
+                break;
+        }
+    }
+    *t = '\0';
+
+    return ret;
 }
 
 /*
@@ -183,13 +253,13 @@ unsigned int lcm_find_named_dimension(FILE *f, lcm_struct_t *ls,
 static char *go_membername(lcm_struct_t *ls, const char *const str,
     int method)
 {
-    char *membername = dots_to_underscores(str);
+    char *membername = go_name(str);
 
     if (lcm_find_member_with_named_dimension(ls, str, 0) >= ls->members->len) {
         // If not a read-only attribute, uppercase it to export it.
         membername[0] = toupper(membername[0]);
     } else if (method) {
-        // If read-only should be method invocation or not
+        // If read-only should be method invocation.
         size_t len = strlen(membername);
         membername = realloc(membername, len + 3);
         membername[0] = toupper(membername[0]);
@@ -219,9 +289,10 @@ static char *go_typename(const char *const package,
     // In case none of the above
     GString *name = g_string_new("");
 
-    char *typename = dots_to_underscores(type);
-    char *gotype = first_to_upper(typename);
-    free(typename);
+    char *gotype = go_name(type);
+
+    // Uppercase first character to make it public
+    gotype[0] = toupper(gotype[0]);
 
     if (strcmp(package, typepackage) != 0) {
         g_string_printf(name, "%s.%s", typepackage, gotype);
@@ -489,14 +560,14 @@ static void emit_go_lcm_imports(FILE *f, lcm_struct_t *ls)
     emit(1, "\"fmt\"");
     emit(1, "\"math\"");
     emit(1, "\"math/bits\"");
-    for (unsigned int i = 0; i < ls->members->len; i++) {
+    for (int i = 0; i < ls->members->len; i++) {
         lcm_member_t *lm = (lcm_member_t *)g_ptr_array_index(ls->members, i);
 
         if (lcm_is_primitive_type(lm->type->lctypename))
                 continue;
 
         int imported = FALSE;
-        for (unsigned int j = i - 1; j > 0; j--) {
+        for (int j = i - 1; j > 0; j--) {
             lcm_member_t *lm_ =
                 (lcm_member_t *)g_ptr_array_index(ls->members, j);
 
@@ -1077,11 +1148,10 @@ static void emit_go_lcm_fingerprint(FILE *f, lcm_struct_t *ls,
 
         if (!lcm_is_primitive_type(lm->type->lctypename)) {
             emit_end("+");
-            char *typename = dots_to_underscores(lm->type->lctypename);
-            char *gotype = first_to_upper(typename);
-            emit_start(2, "%sFingerprint(path...)", gotype);
-            free(gotype);
-            free(typename);
+            char *lm_gotype = go_typename(ls->structname->package,
+                lm->type->package, lm->type->lctypename);
+            emit_start(2, "%sFingerprint(path...)", lm_gotype);
+            free(lm_gotype);
         }
     }
 
@@ -1186,9 +1256,10 @@ ret_size:
 int emit_go_lcm(lcmgen_t *lcm, lcm_struct_t *ls, const char *const dir,
     int64_t fingerprint)
 {
-    char *typename = dots_to_underscores(ls->structname->lctypename);
-    char *gopackage = dots_to_underscores(lcm->package);
-    char *gotype = first_to_upper(typename);
+    char *typename = strip_dots(ls->structname->lctypename);
+    char *gopackage = strip_dots(lcm->package);
+    char *gotype = go_typename(lcm->package, ls->structname->package,
+        ls->structname->lctypename);
     char *path = go_filename(lcm, dir, typename, fingerprint, "");
 
     if (!lcm_needs_generation(lcm, ls->lcmfile, path))
@@ -1206,7 +1277,7 @@ int emit_go_lcm(lcmgen_t *lcm, lcm_struct_t *ls, const char *const dir,
 
     // Fingerprint const
     if (fingerprint == 0) {
-        emit_go_lcm_fingerprint_const(f, ls->hash, typename);
+        emit_go_lcm_fingerprint_const(f, ls->hash, gotype);
     } else {
         emit_go_lcm_fingerprint_const(f, fingerprint, gotype);
     }
@@ -1257,9 +1328,10 @@ int emit_go_lcm(lcmgen_t *lcm, lcm_struct_t *ls, const char *const dir,
 int emit_go_gopacket(lcmgen_t *lcm, lcm_struct_t *ls, const char *const dir,
     int64_t fingerprint)
 {
-    char *typename = dots_to_underscores(ls->structname->lctypename);
-    char *gopackage = dots_to_underscores(lcm->package);
-    char *gotype = first_to_upper(gopackage);
+    char *typename = strip_dots(ls->structname->lctypename);
+    char *gopackage = strip_dots(lcm->package);
+    char *gotype = go_typename(lcm->package, ls->structname->package,
+        ls->structname->lctypename);
     char *path = go_filename(lcm, dir, typename, fingerprint, "_gopacket");
 
     if (!lcm_needs_generation(lcm, ls->lcmfile, path))
@@ -1276,26 +1348,29 @@ int emit_go_gopacket(lcmgen_t *lcm, lcm_struct_t *ls, const char *const dir,
     emit(0, "import (");
     emit(1, "\"github.com/google/gopacket\"");
     emit(1, "\"github.com/lcm-proj/lcm/lcm-go/gopacket_lcm\"");
-    emit(1, "\"github.com/lcm-proj/lcm/lcm-go/lcm\"");
     emit(0, ")");
     emit_nl();
 
     // The gopacket LayerClass assigned to us
-    emit(0, "var layerClass gopacket.LayerType = gopacket.LayerTypeZero");
+    emit(0, "var layerClass%s gopacket.LayerType = gopacket.LayerTypeZero",
+        gotype);
     emit_nl();
 
     // Register our decoder
     emit(0, "func init() {");
     emit(1, "// Register ourselves as decoders for %s", "TODO");
-    emit_start(1, "layerClass = lcm_gopacket.RegisterLCMLayerType(");
+    emit_start(1, "layerClass%s = lcm_gopacket.RegisterLCMLayerType(",
+        gotype);
     emit_continue_go_fingerprint_string(f, lcm, gotype);
-    emit_end(", gopacket.DecodeFunc(decodeFunc))");
+    emit_end(", gopacket.DecodeFunc(decodeFunc%s))", gotype);
     emit(0, "}");
     emit_nl();
 
     // Implement the gopacket Decoder go interface
-    emit(0, "// decodeFunc is the implementation of Decoder (type DecodeFunc)");
-    emit(0, "func decodeFunc(data []byte, pb gopacket.PacketBuilder) error {");
+    emit(0,"// decodeFunc%s is the implementation of Decoder (type DecodeFunc)",
+        gotype);
+    emit(0, "func decodeFunc%s(data []byte, pb gopacket.PacketBuilder) error {",
+        gotype);
     emit(1, "lcm := %s{}", gotype);
     emit_nl();
     emit(1, "if err := lcm.DecodeFromBytes(data, pb); err != nil {");
@@ -1319,7 +1394,7 @@ int emit_go_gopacket(lcmgen_t *lcm, lcm_struct_t *ls, const char *const dir,
 
     emit(0, "// CanDecode implements DecodingLayer");
     emit(0, "func (%s) CanDecode() gopacket.LayerClass {", gotype);
-    emit(1, "return layerClass");
+    emit(1, "return layerClass%s", gotype);
     emit(0, "}");
     emit_nl();
 
@@ -1332,7 +1407,7 @@ int emit_go_gopacket(lcmgen_t *lcm, lcm_struct_t *ls, const char *const dir,
     // Implement the gopacket Layer go interface
     emit(0, "// LayerType implements Layer");
     emit(0, "func (%s) LayerType() gopacket.LayerType {", gotype);
-    emit(1, "return layerClass");
+    emit(1, "return layerClass%s", gotype);
     emit(0, "}");
     emit_nl();
 
@@ -1406,8 +1481,10 @@ int emit_go(lcmgen_t *lcm)
     }
 
     if (!getopt_get_bool(lcm->gopt, "go-strip-dirs")) {
-        dir = g_string_append(dir, lcm->package);
+        char *pkg_path = dots_to_path(lcm->package);
+        dir = g_string_append(dir, pkg_path);
         dir = g_string_append_c(dir, '/');
+        free(pkg_path);
     }
 
     // Create path if not existing and requested
