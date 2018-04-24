@@ -18,7 +18,6 @@ type LCMHeader struct {
 	Magic          uint32
 	SequenceNumber uint32
 	// FRAGMENTED HEADER ONLY FIELDS
-	Fragmented     bool
 	PayloadSize    uint32
 	FragmentOffset uint32
 	FragmentNumber uint16
@@ -26,6 +25,7 @@ type LCMHeader struct {
 	// COMMON FIELD
 	ChannelName string
 	// GOPACKET HELPER FIELDS
+	Fragmented  bool
 	fingerprint uint64
 	contents    []byte
 	payload     []byte
@@ -104,6 +104,8 @@ func (lcm *LCMHeader) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) e
 
 		lcm.TotalFragments = binary.BigEndian.Uint16(data[offset : offset+2])
 		offset += 2
+
+		fmt.Println("THATS A FRAGMENT")
 	} else {
 		lcm.Fragmented = false
 	}
