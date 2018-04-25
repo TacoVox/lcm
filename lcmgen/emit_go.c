@@ -1497,7 +1497,24 @@ int emit_go(lcmgen_t *lcm)
     ////////////////////////////////////////////////////////////
     // STRUCTS
     for (unsigned int i = 0; i < lcm->structs->len; i++) {
+
         lcm_struct_t *ls = (lcm_struct_t *) g_ptr_array_index(lcm->structs, i);
+
+        GString *dir = g_string_new(gopath->str);
+
+        if (!getopt_get_bool(lcm->gopt, "go-strip-dirs")) {
+            char *pkg_path = dots_to_path(ls->package);
+            dir = g_string_append(dir, pkg_path);
+            dir = g_string_append_c(dir, '/');
+            free(pkg_path);
+        }
+
+        // Create path if not existing and requested
+        if (getopt_get_bool(lcm->gopt, "go-mkdir")) {
+            char *dirname = g_path_get_dirname(dir->str);
+            g_mkdir_with_parents(dirname, 0755);
+            g_free(dirname);
+        }
 
         if (ls->enums->len) {
             printf("Go generator does not support enums.\n");
