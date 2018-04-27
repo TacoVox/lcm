@@ -1,4 +1,4 @@
-package lcm_gopacket
+package gopacket_lcm
 
 import (
 	"encoding/binary"
@@ -79,7 +79,7 @@ func decodeLCMHeader(data []byte, p gopacket.PacketBuilder) error {
 func (lcm *LCMHeader) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
 	var offset int = 0
 
-	lcm.Magic = binary.BigEndian.Uint32(data[:4])
+	lcm.Magic = binary.BigEndian.Uint32(data[offset:4])
 	offset += 4
 
 	if lcm.Magic != lcmShortHeaderMagic && lcm.Magic != lcmFragmentedHeaderMagic {
@@ -87,7 +87,7 @@ func (lcm *LCMHeader) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) e
 			"LCM magic numbers. Dropping packet.", lcm.Magic)
 	}
 
-	lcm.SequenceNumber = binary.BigEndian.Uint32(data[4:8])
+	lcm.SequenceNumber = binary.BigEndian.Uint32(data[offset:8])
 	offset += 4
 
 	if lcm.Magic == lcmFragmentedHeaderMagic {
@@ -104,24 +104,24 @@ func (lcm *LCMHeader) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) e
 
 		lcm.TotalFragments = binary.BigEndian.Uint16(data[offset : offset+2])
 		offset += 2
-
-		fmt.Println("THATS A FRAGMENT")
 	} else {
 		lcm.Fragmented = false
 	}
 
-	buffer := make([]byte, 0)
-	for _, b := range data[8:] {
-		offset++
+	if !lcm.Fragmented || (lcm.Fragmented && lcm.FragmentNumber == 0) {
+		buffer := make([]byte, 0)
+		for _, b := range data[offset:] {
+			offset++
 
-		if b == 0 {
-			break
+			if b == 0 {
+				break
+			}
+
+			buffer = append(buffer, b)
 		}
 
-		buffer = append(buffer, b)
+		lcm.ChannelName = string(buffer)
 	}
-
-	lcm.ChannelName = string(buffer)
 
 	lcm.fingerprint = binary.BigEndian.Uint64(data[offset : offset+8])
 
