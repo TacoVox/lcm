@@ -1421,7 +1421,7 @@ int emit_go_gopacket(lcmgen_t *lcm, lcm_struct_t *ls, const char *const dir,
     // Imports
     emit(0, "import (");
     emit(1, "\"github.com/google/gopacket\"");
-    emit(1, "\"github.com/lcm-proj/lcm/lcm-go/gopacket_lcm\"");
+    emit(1, "\"github.com/google/gopacket/layers\"");
     emit(0, ")");
     emit_nl();
 
@@ -1433,7 +1433,7 @@ int emit_go_gopacket(lcmgen_t *lcm, lcm_struct_t *ls, const char *const dir,
     // Register our decoder
     emit(0, "func init() {");
     emit(1, "// Register ourselves as decoders for %s", "TODO");
-    emit_start(1, "layerClass%s = gopacket_lcm.RegisterLCMLayerType(",
+    emit_start(1, "layerClass%s = layers.RegisterLCMLayerType(0, ",
         gotype);
     emit_continue_go_fingerprint_string(f, lcm, gotype);
     emit_end(", gopacket.DecodeFunc(decodeFunc%s))", gotype);
