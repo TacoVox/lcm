@@ -1,4 +1,4 @@
-package lcm_go
+package lcm
 
 import (
 	"testing"
