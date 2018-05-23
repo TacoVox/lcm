@@ -1426,17 +1426,20 @@ int emit_go_gopacket(lcmgen_t *lcm, lcm_struct_t *ls, const char *const dir,
     emit_nl();
 
     // The gopacket LayerClass assigned to us
-    emit(0, "var layerClass%s gopacket.LayerType = gopacket.LayerTypeZero",
+    emit(0, "var layerClass%s = gopacket.LayerTypeZero",
         gotype);
     emit_nl();
 
     // Register our decoder
     emit(0, "func init() {");
-    emit(1, "// Register ourselves as decoders for %s", "TODO");
-    emit_start(1, "layerClass%s = layers.RegisterLCMLayerType(0, ",
-        gotype);
+    emit(1, "// Register ourselves as decoders for %s.%s", gopackage, typename);
+    emit(1, "layerClass%s = layers.RegisterLCMLayerType(", gotype);
+    emit(2, "0,");
+    emit(2, "\"%s\",", gotype);
+    emit_start(2, "layers.LCMFingerprint(");
     emit_continue_go_fingerprint_string(f, lcm, gotype);
-    emit_end(", gopacket.DecodeFunc(decodeFunc%s))", gotype);
+    emit_end("),");
+    emit(2, "gopacket.DecodeFunc(decodeFunc%s))", gotype);
     emit(0, "}");
     emit_nl();
 
