@@ -713,12 +713,22 @@ static int emit_go_lcm_struct_definition(FILE *f, lcmgen_t *lcm,
     lcm_struct_t *ls, const char *const gotype)
 {
     unsigned int max_member_len = 0;
+    unsigned int max_type_len = 0;
 
     for (unsigned int i = 0; i < ls->members->len; i++) {
         lcm_member_t *lm = (lcm_member_t *)g_ptr_array_index(ls->members, i);
 
-        if (strlen(lm->membername) > max_member_len)
-            max_member_len = strlen(lm->membername);
+        char *membername = go_membername(ls, lm->membername, FALSE);
+        char *membertype = go_typename("", "", lm->type->lctypename, 0);
+
+        if (strlen(membername) > max_member_len)
+            max_member_len = strlen(membername);
+
+        if (strlen(membertype) > max_type_len)
+            max_type_len = strlen(membertype);
+
+        free(membername);
+        free(membertype);
     }
 
     emit_comment(f, 0, ls->comment);
@@ -758,9 +768,11 @@ static int emit_go_lcm_struct_definition(FILE *f, lcmgen_t *lcm,
             }
         }
 
-        int spaces = max_member_len - strlen(membername) + 1;
-        emit(1, "%s%*s%s%s", membername, spaces, "", arraystr->str,
-            membertype);
+        // TODO: Revise spacing (%*s, space_int, "")
+        int type_spaces = max_member_len - strlen(membername) + 1;
+        int hdf_name_spaces = max_type_len - strlen(membertype) + 1;
+        emit(1, "%s%s %s `%s`", membername, arraystr->str, membertype,
+            lm->membername);
 
         free(membername);
         free(membertype);
